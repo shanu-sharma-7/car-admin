@@ -14,8 +14,10 @@ import {
   FaMoneyBillWave,
   FaPlus,
   FaTimes,
-  FaCheckCircle,
+  FaLink,
 } from "react-icons/fa";
+
+const API_URL = "https://carr-backend.onrender.com";
 
 const initialFormData = {
   carName: "",
@@ -41,7 +43,9 @@ const Addcar = () => {
 
   const [formData, setFormData] = useState(initialFormData);
   const [image, setImage] = useState(null);
+  const [imageUrl, setImageUrl] = useState("");
   const [preview, setPreview] = useState("");
+  const [imageFailed, setImageFailed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -59,7 +63,7 @@ const Addcar = () => {
       [name]: value,
     }));
 
-    if (error) setError("");
+    setError("");
   };
 
   const handleImageChange = (e) => {
@@ -80,7 +84,19 @@ const Addcar = () => {
     }
 
     setImage(file);
+    setImageUrl("");
     setPreview(URL.createObjectURL(file));
+    setImageFailed(false);
+    setError("");
+  };
+
+  const handleImageUrlChange = (e) => {
+    const value = e.target.value;
+
+    setImageUrl(value);
+    setImage(null);
+    setPreview("");
+    setImageFailed(false);
     setError("");
   };
 
@@ -88,13 +104,42 @@ const Addcar = () => {
     e.preventDefault();
     setError("");
 
-    if (Number(formData.price) <= 0) {
+    if (!formData.carName.trim()) {
+      setError("Please enter the car name.");
+      return;
+    }
+
+    if (!Number.isFinite(Number(formData.price)) || Number(formData.price) <= 0) {
       setError("Daily price must be greater than zero.");
       return;
     }
 
-    if (formData.year && Number(formData.year) > new Date().getFullYear() + 1) {
+    if (
+      formData.year &&
+      (Number(formData.year) < 1900 ||
+        Number(formData.year) > new Date().getFullYear() + 1)
+    ) {
       setError("Please enter a valid manufacturing year.");
+      return;
+    }
+
+    const trimmedImageUrl = imageUrl.trim();
+
+    if (
+      trimmedImageUrl &&
+      !/^https?:\/\/\S+$/i.test(trimmedImageUrl)
+    ) {
+      setError("Please enter a valid image URL starting with http:// or https://.");
+      return;
+    }
+
+    if (trimmedImageUrl && imageFailed) {
+      setError("The image URL could not be loaded. Please check the link first.");
+      return;
+    }
+
+    if (!image && !trimmedImageUrl) {
+      setError("Please upload a car image or enter an image URL.");
       return;
     }
 
@@ -105,26 +150,29 @@ const Addcar = () => {
     data.append("dailyRate", formData.price);
     data.append("seats", formData.seats);
     data.append("fuelType", formData.fuel);
-    data.append("mileage", formData.mileage);
+    data.append("mileage", formData.mileage || "0");
     data.append("category", formData.category);
     data.append("transmission", formData.transmission);
     data.append("description", formData.description.trim());
     data.append("year", formData.year);
     data.append("color", formData.color.trim());
 
+    // A selected file takes priority over the URL.
     if (image) {
       data.append("image", image);
+    } else {
+      data.append("image", trimmedImageUrl);
     }
 
     try {
       setLoading(true);
 
-      await axios.post("https://carr-backend.onrender.com/api/cars", data);
+      await axios.post(`${API_URL}/api/cars`, data);
 
-      alert("Car added successfully!");
+      window.alert("Car added successfully!");
       navigate("/manage-car");
     } catch (err) {
-      console.error("UPLOAD ERROR:", err.response?.data || err.message);
+      console.error("ADD CAR ERROR:", err.response?.data || err.message);
 
       setError(
         err.response?.data?.message ||
@@ -138,14 +186,17 @@ const Addcar = () => {
   const handleReset = () => {
     setFormData(initialFormData);
     setImage(null);
+    setImageUrl("");
     setPreview("");
+    setImageFailed(false);
     setError("");
   };
+
+  const displayedImage = preview || imageUrl.trim();
 
   return (
     <div className="min-h-screen bg-[#090909] px-3 py-6 text-white sm:px-6 lg:px-10">
       <div className="mx-auto max-w-6xl">
-        {/* Page heading */}
         <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
           <div>
             <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.25em] text-[#c9a96e]">
@@ -158,7 +209,8 @@ const Addcar = () => {
             </h1>
 
             <p className="mt-2 max-w-xl text-sm leading-6 text-gray-400">
-              Add a vehicle to your fleet by filling in its details below.
+              Add a vehicle to your fleet by entering its details and choosing
+              an image.
             </p>
           </div>
 
@@ -175,7 +227,6 @@ const Addcar = () => {
 
         <form onSubmit={handleSubmit}>
           <div className="overflow-hidden rounded-2xl border border-white/10 bg-[#111111] shadow-2xl shadow-black/30">
-            {/* Section heading */}
             <div className="border-b border-white/10 px-5 py-5 sm:px-8">
               <h2 className="text-lg font-semibold">Vehicle Information</h2>
               <p className="mt-1 text-sm text-gray-500">
@@ -184,7 +235,6 @@ const Addcar = () => {
             </div>
 
             <div className="grid grid-cols-1 gap-8 p-5 sm:p-8 lg:grid-cols-[1fr_300px]">
-              {/* Main form */}
               <div className="space-y-7">
                 <section>
                   <h3 className="mb-5 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-[#c9a96e]">
@@ -367,24 +417,29 @@ const Addcar = () => {
                   </div>
                 </section>
 
-                {/* Image upload for smaller screens */}
                 <section className="lg:hidden">
                   <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-[#c9a96e]">
                     Vehicle Image
                   </h3>
 
                   <ImageUploader
-                    preview={preview}
+                    imageUrl={imageUrl}
+                    displayedImage={displayedImage}
+                    imageFailed={imageFailed}
+                    onImageUrlChange={handleImageUrlChange}
+                    onImageError={() => setImageFailed(true)}
+                    onImageLoad={() => setImageFailed(false)}
                     onImageChange={handleImageChange}
                     onRemove={() => {
                       setImage(null);
+                      setImageUrl("");
                       setPreview("");
+                      setImageFailed(false);
                     }}
                   />
                 </section>
               </div>
 
-              {/* Desktop image panel */}
               <aside className="hidden lg:block">
                 <div className="sticky top-6">
                   <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-[#c9a96e]">
@@ -392,11 +447,18 @@ const Addcar = () => {
                   </h3>
 
                   <ImageUploader
-                    preview={preview}
+                    imageUrl={imageUrl}
+                    displayedImage={displayedImage}
+                    imageFailed={imageFailed}
+                    onImageUrlChange={handleImageUrlChange}
+                    onImageError={() => setImageFailed(true)}
+                    onImageLoad={() => setImageFailed(false)}
                     onImageChange={handleImageChange}
                     onRemove={() => {
                       setImage(null);
+                      setImageUrl("");
                       setPreview("");
+                      setImageFailed(false);
                     }}
                   />
 
@@ -406,8 +468,9 @@ const Addcar = () => {
                     </p>
                     <ul className="space-y-2 text-xs leading-5 text-gray-500">
                       <li>• Use a clear vehicle photo.</li>
-                      <li>• JPG, PNG or WebP format.</li>
-                      <li>• Maximum file size: 5 MB.</li>
+                      <li>• JPG, PNG or WebP recommended.</li>
+                      <li>• Uploaded file limit: 5 MB.</li>
+                      <li>• Use a direct image URL, not a Google search URL.</li>
                       <li>• Landscape images work best.</li>
                     </ul>
                   </div>
@@ -415,7 +478,6 @@ const Addcar = () => {
               </aside>
             </div>
 
-            {/* Error message */}
             {error && (
               <div className="mx-5 mb-5 flex items-start gap-3 rounded-xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300 sm:mx-8">
                 <FaTimes className="mt-0.5 shrink-0" />
@@ -423,7 +485,6 @@ const Addcar = () => {
               </div>
             )}
 
-            {/* Form actions */}
             <div className="flex flex-col-reverse gap-3 border-t border-white/10 bg-[#0d0d0d] px-5 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-8">
               <button
                 type="button"
@@ -459,54 +520,85 @@ const Addcar = () => {
   );
 };
 
-const ImageUploader = ({ preview, onImageChange, onRemove }) => {
-  return (
-    <div>
-      <label className="flex min-h-52 cursor-pointer flex-col items-center justify-center overflow-hidden rounded-xl border border-dashed border-[#c9a96e]/40 bg-[#0b0b0b] transition hover:border-[#c9a96e]">
-        {preview ? (
-          <img
-            src={preview}
-            alt="Car preview"
-            className="h-56 w-full object-cover"
-          />
-        ) : (
-          <div className="px-5 py-10 text-center">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#c9a96e]/10 text-[#c9a96e]">
-              <FaImage size={24} />
-            </div>
-
-            <p className="text-sm font-semibold text-gray-200">
-              Upload car image
-            </p>
-            <p className="mt-2 text-xs text-gray-500">
-              Click to browse your files
-            </p>
-            <p className="mt-3 text-xs text-[#c9a96e]">
-              PNG, JPG or WebP · Max 5 MB
-            </p>
-          </div>
-        )}
-
-        <input
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={onImageChange}
+const ImageUploader = ({
+  imageUrl,
+  displayedImage,
+  imageFailed,
+  onImageUrlChange,
+  onImageError,
+  onImageLoad,
+  onImageChange,
+  onRemove,
+}) => (
+  <div className="space-y-4">
+    <div className="relative min-h-44 overflow-hidden rounded-xl border border-white/10 bg-[#0b0b0b]">
+      {displayedImage && !imageFailed ? (
+        <img
+          src={displayedImage}
+          alt="Car preview"
+          className="h-52 w-full object-cover"
+          onError={onImageError}
+          onLoad={onImageLoad}
         />
-      </label>
-
-      {preview && (
-        <button
-          type="button"
-          onClick={onRemove}
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 py-2.5 text-sm text-gray-400 transition hover:border-red-500/40 hover:text-red-400"
-        >
-          <FaTimes />
-          Remove Image
-        </button>
+      ) : (
+        <div className="flex min-h-44 flex-col items-center justify-center px-4 py-8 text-center">
+          <FaImage size={30} className="mb-3 text-[#c9a96e]" />
+          <p className="text-sm font-semibold text-gray-200">
+            {displayedImage ? "Image could not be loaded" : "Car image preview"}
+          </p>
+          <p className="mt-2 text-xs text-gray-500">
+            Upload a photo or paste an image URL below.
+          </p>
+        </div>
       )}
     </div>
-  );
-};
+
+    <div>
+      <label className={labelClass}>
+        <FaLink className="text-[#c9a96e]" />
+        Image URL
+      </label>
+      <input
+        type="url"
+        value={imageUrl}
+        onChange={onImageUrlChange}
+        placeholder="https://example.com/car-image.jpg"
+        className={inputClass}
+      />
+      <p className="mt-2 text-xs leading-5 text-gray-500">
+        Paste a direct link to the image. Some Google image links may expire or
+        block external websites.
+      </p>
+    </div>
+
+    <div className="flex items-center gap-3">
+      <div className="h-px flex-1 bg-white/10" />
+      <span className="text-xs text-gray-500">OR UPLOAD A FILE</span>
+      <div className="h-px flex-1 bg-white/10" />
+    </div>
+
+    <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-[#c9a96e]/30 px-4 py-3 text-sm font-semibold text-[#d7b77d] transition hover:bg-[#c9a96e]/10">
+      <FaImage />
+      Choose Image
+      <input
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={onImageChange}
+      />
+    </label>
+
+    {(displayedImage || imageUrl) && (
+      <button
+        type="button"
+        onClick={onRemove}
+        className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 py-2.5 text-sm text-gray-400 transition hover:border-red-500/40 hover:text-red-400"
+      >
+        <FaTimes />
+        Remove Image
+      </button>
+    )}
+  </div>
+);
 
 export default Addcar;
