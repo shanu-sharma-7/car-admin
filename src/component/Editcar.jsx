@@ -25,7 +25,7 @@ const EditCar = () => {
   useEffect(() => {
     const fetchCar = async () => {
       try {
-        const res = await axios.get(`http://localhost:5000/api/cars/${id}`);
+        const res = await axios.get(`https://carr-backend.onrender.com/api/cars/${id}`);
         const car = res.data;
         setFormData({
           carName: car.make || "",
@@ -39,7 +39,7 @@ const EditCar = () => {
           year: car.year || "",
           color: car.color || "",
         });
-        if (car.image) setPreview(`http://localhost:5000/uploads/${car.image}`);
+        if (car.image) setPreview(`https://carr-backend.onrender.com/uploads/${car.image}`);
       } catch (err) {
         console.error(err);
         alert("Failed to fetch car details");
@@ -77,7 +77,7 @@ const EditCar = () => {
     if (image) data.append("image", image);
 
     try {
-      await axios.put(`http://localhost:5000/api/cars/${id}`, data, {
+      await axios.put(`https://carr-backend.onrender.com/api/cars/${id}`, data, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       alert("Car updated successfully!");

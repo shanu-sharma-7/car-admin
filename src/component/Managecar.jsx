@@ -17,7 +17,7 @@ import {
   FaSyncAlt,
 } from "react-icons/fa";
 
-const API_URL = "http://localhost:5000";
+const API_URL = "https://carr-backend.onrender.com";
 
 const ManageCar = () => {
   const [cars, setCars] = useState([]);
@@ -34,12 +34,20 @@ const ManageCar = () => {
       setLoading(true);
       setError("");
 
-      const res = await axios.get(`${API_URL}/api/cars`);
+      const response = await axios.get(`${API_URL}/api/cars`);
+      const responseData = response.data?.data ?? response.data;
 
-      const responseData = res.data?.data ?? res.data;
-      setCars(Array.isArray(responseData) ? responseData : []);
+      if (!Array.isArray(responseData)) {
+        throw new Error("Invalid cars response");
+      }
+
+      setCars(responseData);
     } catch (err) {
-      console.error("FETCH CARS ERROR:", err.response?.data || err.message);
+      console.error(
+        "FETCH CARS ERROR:",
+        err.response?.data || err.message
+      );
+
       setError("Unable to load vehicles. Please try again.");
     } finally {
       setLoading(false);
@@ -63,6 +71,7 @@ const ManageCar = () => {
 
     return cars.filter((car) => {
       const name = `${car.make || ""} ${car.model || ""}`.toLowerCase();
+
       const matchesSearch =
         name.includes(searchText) ||
         String(car.year || "").includes(searchText) ||
@@ -91,7 +100,10 @@ const ManageCar = () => {
         previousCars.filter((car) => car._id !== carId)
       );
     } catch (err) {
-      console.error("DELETE CAR ERROR:", err.response?.data || err.message);
+      console.error(
+        "DELETE CAR ERROR:",
+        err.response?.data || err.message
+      );
 
       window.alert(
         err.response?.data?.message || "Failed to delete the vehicle."
@@ -115,14 +127,28 @@ const ManageCar = () => {
     return car.make || car.model || "Unnamed Vehicle";
   };
 
+  // Supports absolute URLs, /uploads/file.png and filename-only values.
   const getImageUrl = (image) => {
-    if (!image) return "";
-
-    if (image.startsWith("http://") || image.startsWith("https://")) {
-      return image;
+    if (!image || typeof image !== "string") {
+      return "";
     }
 
-    return `${API_URL}/uploads/${image.replace(/^\/+/, "")}`;
+    const imagePath = image.trim();
+
+    if (!imagePath) return "";
+
+    // Do not modify an already complete URL.
+    if (/^https?:\/\//i.test(imagePath)) {
+      return imagePath;
+    }
+
+    // Handle paths saved as uploads/file.png or /uploads/file.png.
+    if (/^\/?uploads\//i.test(imagePath)) {
+      return `${API_URL}/${imagePath.replace(/^\/+/, "")}`;
+    }
+
+    // Handle a filename saved without its uploads directory.
+    return `${API_URL}/uploads/${imagePath.replace(/^\/+/, "")}`;
   };
 
   if (loading) {
@@ -130,6 +156,7 @@ const ManageCar = () => {
       <div className="min-h-screen bg-[#090909] px-4 py-8 text-white sm:px-8">
         <div className="mx-auto max-w-7xl">
           <div className="mb-8 h-10 w-64 animate-pulse rounded-lg bg-[#1b1b1b]" />
+
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
             {[1, 2, 3].map((item) => (
               <div
@@ -211,7 +238,7 @@ const ManageCar = () => {
           />
         </div>
 
-        {/* Search and filter */}
+        {/* Search and category filter */}
         <div className="mb-7 flex flex-col gap-4 rounded-2xl border border-white/10 bg-[#111111] p-4 sm:flex-row sm:items-center sm:p-5">
           <div className="relative flex-1">
             <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
@@ -238,10 +265,11 @@ const ManageCar = () => {
           </select>
         </div>
 
-        {/* Error state */}
+        {/* API error */}
         {error && (
           <div className="mb-6 flex flex-col gap-3 rounded-xl border border-red-500/20 bg-red-500/10 p-4 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm text-red-300">{error}</p>
+
             <button
               type="button"
               onClick={fetchCars}
@@ -280,130 +308,166 @@ const ManageCar = () => {
             )}
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
-            {filteredCars.map((car) => (
-              <article
-                key={car._id}
-                className="group overflow-hidden rounded-2xl border border-white/10 bg-[#111111] transition duration-300 hover:-translate-y-1 hover:border-[#c9a96e]/40 hover:shadow-xl hover:shadow-black/30"
-              >
-                {/* Car image */}
-                <div className="relative h-52 overflow-hidden bg-[#1b1b1b]">
-                  {car.image ? (
-                    <img
-                      src={getImageUrl(car.image)}
-                      alt={getCarName(car)}
-                      loading="lazy"
-                      className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                      onError={(e) => {
-                        e.currentTarget.style.display = "none";
-                      }}
-                    />
-                  ) : (
-                    <div className="flex h-full flex-col items-center justify-center gap-3 text-gray-600">
-                      <FaCar size={40} />
-                      <span className="text-sm">No image available</span>
+          !error && (
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
+              {filteredCars.map((car) => (
+                <article
+                  key={car._id}
+                  className="group overflow-hidden rounded-2xl border border-white/10 bg-[#111111] transition duration-300 hover:-translate-y-1 hover:border-[#c9a96e]/40 hover:shadow-xl hover:shadow-black/30"
+                >
+                  {/* Car image */}
+                  <CarImage
+                    image={car.image}
+                    name={getCarName(car)}
+                    category={car.category}
+                    year={car.year}
+                  />
+
+                  {/* Car details */}
+                  <div className="p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h2 className="break-words text-lg font-bold text-white">
+                          {getCarName(car)}
+                        </h2>
+
+                        <p className="mt-1 flex items-center gap-2 text-xs text-gray-500">
+                          <FaCalendarAlt className="text-[#c9a96e]" />
+                          Model year: {car.year || "N/A"}
+                        </p>
+                      </div>
+
+                      <div className="shrink-0 text-right">
+                        <p className="text-xl font-bold text-[#c9a96e]">
+                          ${Number(car.dailyRate || 0).toLocaleString("en-US")}
+                        </p>
+                        <p className="text-xs text-gray-500">per day</p>
+                      </div>
                     </div>
-                  )}
 
-                  <div className="absolute left-3 top-3 rounded-lg border border-white/10 bg-black/75 px-3 py-1.5 text-xs font-semibold text-[#e0c18b] backdrop-blur">
-                    {car.category || "Vehicle"}
-                  </div>
+                    <div className="my-5 grid grid-cols-2 gap-3 border-y border-white/10 py-4">
+                      <Detail
+                        icon={<FaUserFriends />}
+                        label="Seats"
+                        value={car.seats || "N/A"}
+                      />
 
-                  {car.year && (
-                    <div className="absolute right-3 top-3 rounded-lg bg-black/75 px-3 py-1.5 text-xs text-white backdrop-blur">
-                      {car.year}
+                      <Detail
+                        icon={<FaGasPump />}
+                        label="Fuel"
+                        value={car.fuelType || "N/A"}
+                      />
+
+                      <Detail
+                        icon={<FaTachometerAlt />}
+                        label="Mileage"
+                        value={car.mileage ? `${car.mileage} km/L` : "N/A"}
+                      />
+
+                      <Detail
+                        icon={<FaCogs />}
+                        label="Transmission"
+                        value={car.transmission || "N/A"}
+                      />
+
+                      <Detail
+                        icon={<FaPalette />}
+                        label="Color"
+                        value={car.color || "N/A"}
+                      />
                     </div>
-                  )}
-                </div>
 
-                {/* Car details */}
-                <div className="p-5">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <h2 className="break-words text-lg font-bold text-white">
-                        {getCarName(car)}
-                      </h2>
-
-                      <p className="mt-1 flex items-center gap-2 text-xs text-gray-500">
-                        <FaCalendarAlt className="text-[#c9a96e]" />
-                        Model year: {car.year || "N/A"}
+                    {car.description && (
+                      <p className="mb-5 line-clamp-2 text-sm leading-6 text-gray-500">
+                        {car.description}
                       </p>
+                    )}
+
+                    <div className="flex gap-3">
+                      <button
+                        type="button"
+                        onClick={() => handleEdit(car._id)}
+                        className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#c9a96e]/30 py-3 text-sm font-semibold text-[#d7b77d] transition hover:bg-[#c9a96e] hover:text-black"
+                      >
+                        <FaEdit />
+                        Edit Car
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(car._id)}
+                        disabled={deletingId === car._id}
+                        className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-red-500/20 py-3 text-sm font-semibold text-red-400 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        <FaTrash />
+                        {deletingId === car._id ? "Deleting..." : "Delete"}
+                      </button>
                     </div>
-
-                    <div className="shrink-0 text-right">
-                      <p className="text-xl font-bold text-[#c9a96e]">
-                        ${Number(car.dailyRate || 0).toLocaleString("en-US")}
-                      </p>
-                      <p className="text-xs text-gray-500">per day</p>
-                    </div>
                   </div>
-
-                  <div className="my-5 grid grid-cols-2 gap-3 border-y border-white/10 py-4">
-                    <Detail
-                      icon={<FaUserFriends />}
-                      label="Seats"
-                      value={car.seats || "N/A"}
-                    />
-
-                    <Detail
-                      icon={<FaGasPump />}
-                      label="Fuel"
-                      value={car.fuelType || "N/A"}
-                    />
-
-                    <Detail
-                      icon={<FaTachometerAlt />}
-                      label="Mileage"
-                      value={
-                        car.mileage ? `${car.mileage} km/L` : "N/A"
-                      }
-                    />
-
-                    <Detail
-                      icon={<FaCogs />}
-                      label="Transmission"
-                      value={car.transmission || "N/A"}
-                    />
-
-                    <Detail
-                      icon={<FaPalette />}
-                      label="Color"
-                      value={car.color || "N/A"}
-                    />
-                  </div>
-
-                  {car.description && (
-                    <p className="mb-5 line-clamp-2 text-sm leading-6 text-gray-500">
-                      {car.description}
-                    </p>
-                  )}
-
-                  <div className="flex gap-3">
-                    <button
-                      type="button"
-                      onClick={() => handleEdit(car._id)}
-                      className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-[#c9a96e]/30 py-3 text-sm font-semibold text-[#d7b77d] transition hover:bg-[#c9a96e] hover:text-black"
-                    >
-                      <FaEdit />
-                      Edit Car
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(car._id)}
-                      disabled={deletingId === car._id}
-                      className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-red-500/20 py-3 text-sm font-semibold text-red-400 transition hover:bg-red-500/10 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <FaTrash />
-                      {deletingId === car._id ? "Deleting..." : "Delete"}
-                    </button>
-                  </div>
-                </div>
-              </article>
-            ))}
-          </div>
+                </article>
+              ))}
+            </div>
+          )
         )}
       </div>
+    </div>
+  );
+};
+
+// Image fallback is handled separately for every car.
+const CarImage = ({ image, name, category, year }) => {
+  const [failed, setFailed] = useState(false);
+
+  const imageUrl = useMemo(() => {
+    if (!image || typeof image !== "string") return "";
+
+    const path = image.trim();
+
+    if (!path) return "";
+    if (/^https?:\/\//i.test(path)) return path;
+
+    if (/^\/?uploads\//i.test(path)) {
+      return `${API_URL}/${path.replace(/^\/+/, "")}`;
+    }
+
+    return `${API_URL}/uploads/${path.replace(/^\/+/, "")}`;
+  }, [image]);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [image]);
+
+  return (
+    <div className="relative h-52 overflow-hidden bg-[#1b1b1b]">
+      {imageUrl && !failed ? (
+        <img
+          src={imageUrl}
+          alt={name}
+          loading="lazy"
+          onError={() => {
+            console.error("Car image failed to load:", imageUrl);
+            setFailed(true);
+          }}
+          className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+        />
+      ) : (
+        <div className="flex h-full flex-col items-center justify-center gap-3 text-gray-600">
+          <FaCar size={40} />
+          <span className="text-sm">
+            {imageUrl ? "Image unavailable" : "No image available"}
+          </span>
+        </div>
+      )}
+
+      <div className="absolute left-3 top-3 rounded-lg border border-white/10 bg-black/75 px-3 py-1.5 text-xs font-semibold text-[#e0c18b] backdrop-blur">
+        {category || "Vehicle"}
+      </div>
+
+      {year && (
+        <div className="absolute right-3 top-3 rounded-lg bg-black/75 px-3 py-1.5 text-xs text-white backdrop-blur">
+          {year}
+        </div>
+      )}
     </div>
   );
 };
@@ -424,6 +488,7 @@ const StatCard = ({ title, value, icon }) => (
 const Detail = ({ icon, label, value }) => (
   <div className="flex min-w-0 items-start gap-3">
     <span className="mt-0.5 shrink-0 text-[#c9a96e]">{icon}</span>
+
     <div className="min-w-0">
       <p className="text-xs text-gray-500">{label}</p>
       <p className="mt-1 break-words text-sm font-medium text-gray-200">

@@ -13,7 +13,7 @@ import {
   FaExclamationCircle,
 } from "react-icons/fa";
 
-const API_URL = "http://localhost:5000/api/bookings";
+const API_URL = "https://carr-backend.onrender.com/api/bookings";
 
 const statusOptions = [
   "pending",

@@ -119,7 +119,7 @@ const Addcar = () => {
     try {
       setLoading(true);
 
-      await axios.post("http://localhost:5000/api/cars", data);
+      await axios.post("https://carr-backend.onrender.com/api/cars", data);
 
       alert("Car added successfully!");
       navigate("/manage-car");
